@@ -3,6 +3,7 @@
 import sys, os, functions, random, subprocess, time, glob, logging, psutil
 import winsound
 from pathlib import Path
+from StyleSheets import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
@@ -21,8 +22,9 @@ class WhirligigGUI(QWidget):
         self.logger.addHandler(file_handler)
 
         self.rootdir = Path(os.path.dirname(os.path.realpath(__file__)))
-        username = psutil.users()[0][0]
-        self.playlistsFolderPath = "C:/Users/" + username + "/AppData/Roaming/Whirligig/production/Playlists"
+        self.username = psutil.users()[0][0]
+        self.playlistsFolderPath = "C:/Users/" + self.username + "/AppData/Roaming/Whirligig/production/Playlists"
+        print(self.playlistsFolderPath)
         self.selectedPlaylistName = ""
 
         self.shortcutDelete = QShortcut(QKeySequence("Del"), self)
@@ -70,6 +72,8 @@ class WhirligigGUI(QWidget):
         self.bUpdateList.clicked.connect(self.addPlaylistsToList)
         self.level1g.addWidget(self.bUpdateList, 2, 3)
 
+
+
         self.levelBottom = QHBoxLayout()
 
         self.lwPlaylist = QListWidget()
@@ -81,6 +85,36 @@ class WhirligigGUI(QWidget):
         #self.levelBottom.addStretch()
         self.lwPlaylistContents = QListWidget()
         self.lwPlaylistContents.itemSelectionChanged.connect(self.selectedVideo)
+
+        self.betweenLists = QVBoxLayout()
+        self.betweenLists.addStretch()
+        self.filesIconsSize = 22
+
+        self.bDeleteVideo = QPushButton()
+        self.bDeleteVideo.setIcon(QIcon('icons/del.png'))
+        self.bDeleteVideo.setStyleSheet(buttonStyleFiles)
+        self.bDeleteVideo.setIconSize(QSize(self.filesIconsSize, self.filesIconsSize))
+        self.bDeleteVideo.clicked.connect(self.deleteVideoFromPlaylist)
+        self.betweenLists.addWidget(self.bDeleteVideo)
+
+        self.bMoveUp = QPushButton()
+        self.bMoveUp.setStyleSheet(buttonStyleFiles)
+        self.bMoveUp.clicked.connect(self.moveitemup)
+        self.bMoveUp.setIcon(QIcon('icons/up.png'))
+        self.bMoveUp.setIconSize(QSize(self.filesIconsSize, self.filesIconsSize))
+        self.betweenLists.addWidget(self.bMoveUp)
+
+        self.bMoveDown = QPushButton()
+        self.bMoveDown.setStyleSheet(buttonStyleFiles)
+        self.bMoveDown.clicked.connect(self.moveitemdown)
+        #self.bMoveDown.setIcon(QIcon.fromTheme("go-down"))
+        self.bMoveDown.setIcon(QIcon('icons/down.png'))
+        self.bMoveDown.setIconSize(QSize(self.filesIconsSize, self.filesIconsSize))
+        self.betweenLists.addWidget(self.bMoveDown)
+
+        self.betweenLists.addStretch()
+
+        self.levelBottom.addLayout(self.betweenLists)
         self.levelBottom.addWidget(self.lwPlaylistContents)
         self.level0h.addLayout(self.levelBottom)
 
@@ -94,6 +128,36 @@ class WhirligigGUI(QWidget):
         self.setWindowIcon(QIcon(str(self.rootdir / 'icons' / 'r.svg')))
         self.setGeometry(2200, 250, 800, 500)
         self.logger.info("Opened GUI")
+
+    def moveitemup(self):
+        if self.selectedVideoIndex > -1:
+            if self.selectedVideoIndex > 0:
+                removedItem = self.lwPlaylistContents.takeItem(self.selectedVideoIndex)
+                switchIndex = self.selectedVideoIndex - 1
+                self.lwPlaylistContents.insertItem(switchIndex, removedItem)
+                self.lwPlaylistContents.setCurrentItem(removedItem, QItemSelectionModel.Select)
+
+    def moveitemdown(self):
+        if self.selectedVideoIndex > -1:
+            if self.selectedVideoIndex < self.lwPlaylistContents.count():
+                removedItem = self.lwPlaylistContents.takeItem(self.selectedVideoIndex)
+                switchIndex = self.selectedVideoIndex + 1
+                self.lwPlaylistContents.insertItem(switchIndex, removedItem)
+                self.lwPlaylistContents.setCurrentItem(removedItem, QItemSelectionModel.Select)
+
+    def deleteVideoFromPlaylist(self):
+        if self.selectedVideoIndex > -1:
+            fileBaseName = self.playlistContents[self.selectedVideoIndex]["Base"]
+            self.logger.info("Trying to delete {}".format(fileBaseName))
+            playlistName = self.selectedPlaylistName + ".plt"
+            basePath = Path(self.playlistsFolderPath)
+            playlistPath = basePath / playlistName
+            deletePath = self.playlistContents[self.selectedVideoIndex]["Path"]
+            buttonReply = QMessageBox.question(self, 'Confirm Delete', "Are you sure you want to delete {}".format(fileBaseName),
+                                               QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if buttonReply == QMessageBox.Yes:
+                functions.deleteVideoFromPlaylist(playlistPath, deletePath)
+                self.selectedPlaylist()
 
     def renamePlaylist(self):
         self.logger.info("Rename playlist")
@@ -145,19 +209,7 @@ class WhirligigGUI(QWidget):
             self.selectedPlaylistIndex = -1
             self.playlistContents = []
 
-    def deleteVideoFromPlaylist(self):
-        if self.selectedVideoIndex > -1:
-            fileBaseName = self.playlistContents[self.selectedVideoIndex]["Base"]
-            self.logger.info("Trying to delete {}".format(fileBaseName))
-            playlistName = self.selectedPlaylistName + ".plt"
-            basePath = Path(self.playlistsFolderPath)
-            playlistPath = basePath / playlistName
-            deletePath = self.playlistContents[self.selectedVideoIndex]["Path"]
-            buttonReply = QMessageBox.question(self, 'Confirm Delete', "Are you sure you want to delete {}".format(fileBaseName),
-                                               QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if buttonReply == QMessageBox.Yes:
-                functions.deleteVideoFromPlaylist(playlistPath, deletePath)
-                self.selectedPlaylist()
+
 
     def addPlaylistsToList(self):
         self.lwPlaylist.clear()
@@ -313,8 +365,9 @@ class WhirligigGUI(QWidget):
         f.write(playlistName)
         f.close()
         try:
-            launchPath = self.rootdir + "\\launcher.py"
-            subprocess.Popen(launchPath, shell=True)
+            launchPath = self.rootdir / "launcher.py"
+            #self.logger.info(f"launchpath {launchPath}")
+            subprocess.Popen(str(launchPath), shell=True)
         except:
             self.logger.exception("Script failed to execute")
             self.scriptStatusLabel.setText("Script failed to execute")
